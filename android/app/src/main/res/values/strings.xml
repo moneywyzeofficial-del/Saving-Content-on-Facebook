@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">facebook_save_app</string>
+    <!-- Replace with your Facebook App ID -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+</resources>

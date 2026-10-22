@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.example.facebookSaveApp</string>
+    <key>CFBundleName</key>
+    <string>facebook_save_app</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>fbapi</string>
+        <string>fb-messenger-api</string>
+        <string>fbauth2</string>
+        <string>fbshareextension</string>
+    </array>
+    <key>FacebookAppID</key>
+    <string>YOUR_FACEBOOK_APP_ID</string>
+    <key>FacebookDisplayName</key>
+    <string>facebook_save_app</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>fbYOUR_FACEBOOK_APP_ID</string>
+            </array>
+        </dict>
+    </array>
+    <!-- Firebase configuration -->
+    <key>GoogleService-Info</key>
+    <string>GoogleService-Info.plist</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Permite salvar imagens capturadas da extensão de compartilhamento.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Permite ler imagens selecionadas para envio.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Permite gravar áudio de vídeos compartilhados.</string>
+</dict>
+</plist>
