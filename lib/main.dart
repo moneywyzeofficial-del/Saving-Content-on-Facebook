@@ -105,7 +105,7 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
         content: Text(message),
         backgroundColor: bgColor,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(milliseconds: 1200),
       ),
     );
   }
@@ -219,7 +219,7 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
     });
   }
 
-  // Barra superior de separadores (sempre acessível e longe das barras do iOS)
+  // Barra superior de separadores (sempre visível no ecrã sem esconder abas)
   Widget _buildTopTabsStrip(Color activeColor) {
     return ListenableBuilder(
       listenable: SavedItemsRepository.instance,
@@ -227,32 +227,28 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
         return Container(
           color: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildTabPill(
-                  index: 0,
-                  label: 'Início',
-                  icon: Icons.home_filled,
-                  color: const Color(0xFF1877F2),
-                ),
-                ...List.generate(_categories.length, (i) {
-                  final cat = _categories[i];
-                  final count =
-                      SavedItemsRepository.instance.countByType(cat.type);
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 6.0),
-                    child: _buildTabPill(
-                      index: i + 1,
-                      label: count > 0 ? '${cat.title} ($count)' : cat.title,
-                      icon: cat.icon,
-                      color: cat.color,
-                    ),
-                  );
-                }),
-              ],
-            ),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _buildTabPill(
+                index: 0,
+                label: 'Início',
+                icon: Icons.home_filled,
+                color: const Color(0xFF1877F2),
+              ),
+              ...List.generate(_categories.length, (i) {
+                final cat = _categories[i];
+                final count =
+                    SavedItemsRepository.instance.countByType(cat.type);
+                return _buildTabPill(
+                  index: i + 1,
+                  label: count > 0 ? '${cat.title} ($count)' : cat.title,
+                  icon: cat.icon,
+                  color: cat.color,
+                );
+              }),
+            ],
           ),
         );
       },
@@ -534,6 +530,14 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
                             categoryIcon: currentCategory.icon,
                             accentColor: currentCategory.color,
                             onBackToHome: () => _selectTab(0),
+                            onOpenCategoryType: (targetType) {
+                              final idx = _categories.indexWhere(
+                                (c) => c.type == targetType,
+                              );
+                              if (idx != -1) {
+                                _selectTab(idx + 1);
+                              }
+                            },
                             onShowMessage: (msg) => _showMessage(msg),
                             onAddPressed: () => _openReviewScreen(
                               '',

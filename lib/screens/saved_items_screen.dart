@@ -12,6 +12,7 @@ class SavedItemsScreen extends StatelessWidget {
   final Color accentColor;
   final VoidCallback onAddPressed;
   final VoidCallback? onBackToHome;
+  final ValueChanged<String>? onOpenCategoryType;
   final void Function(String message)? onShowMessage;
 
   const SavedItemsScreen({
@@ -22,6 +23,7 @@ class SavedItemsScreen extends StatelessWidget {
     required this.accentColor,
     required this.onAddPressed,
     this.onBackToHome,
+    this.onOpenCategoryType,
     this.onShowMessage,
   });
 
@@ -307,14 +309,12 @@ class SavedItemsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
             const SizedBox(height: 10),
-            // Barra de botões de ação explícitos e fáceis de tocar no iPhone
+            // Barra de botões de ação explícitos e logo visíveis no topo do cartão
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              alignment: WrapAlignment.end,
+              alignment: WrapAlignment.start,
               children: [
                 if (hasUrl)
                   ElevatedButton.icon(
@@ -360,6 +360,103 @@ class SavedItemsScreen extends StatelessWidget {
                 ),
               ],
             ),
+            if (item.summary != null && item.summary!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: accentColor.withOpacity(0.22),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.summarize_outlined,
+                          size: 16,
+                          color: accentColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Resumo do Conteúdo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: accentColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.summary!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (item.extractedLinks.isNotEmpty ||
+                item.extractedImages.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (item.extractedLinks.isNotEmpty)
+                    ActionChip(
+                      avatar: const Icon(
+                        Icons.link,
+                        size: 16,
+                        color: Color(0xFF1E88E5),
+                      ),
+                      backgroundColor:
+                          const Color(0xFF1E88E5).withOpacity(0.1),
+                      label: Text(
+                        '${item.extractedLinks.length} link(s) na aba Links',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E88E5),
+                        ),
+                      ),
+                      onPressed: () {
+                        onOpenCategoryType?.call('link');
+                      },
+                    ),
+                  if (item.extractedImages.isNotEmpty)
+                    ActionChip(
+                      avatar: const Icon(
+                        Icons.image,
+                        size: 16,
+                        color: Color(0xFF00897B),
+                      ),
+                      backgroundColor:
+                          const Color(0xFF00897B).withOpacity(0.1),
+                      label: Text(
+                        '${item.extractedImages.length} imagem(ns) na aba Imagens',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF00897B),
+                        ),
+                      ),
+                      onPressed: () {
+                        onOpenCategoryType?.call('image');
+                      },
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

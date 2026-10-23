@@ -59,7 +59,12 @@ class SavedItemsRepository extends ChangeNotifier {
           'type': item.type,
           if (item.title != null) 'title': item.title,
           if (item.content != null) 'content': item.content,
+          if (item.summary != null) 'summary': item.summary,
           if (item.url != null) 'url': item.url,
+          if (item.extractedLinks.isNotEmpty)
+            'extractedLinks': item.extractedLinks,
+          if (item.extractedImages.isNotEmpty)
+            'extractedImages': item.extractedImages,
           'createdAtMs': item.createdAt.millisecondsSinceEpoch,
         };
       }).toList());
@@ -71,17 +76,24 @@ class SavedItemsRepository extends ChangeNotifier {
     required String type,
     String? title,
     String? content,
+    String? summary,
     String? url,
+    List<String> extractedLinks = const <String>[],
+    List<String> extractedImages = const <String>[],
     String owner = 'anonymous',
   }) {
-    final id = 'item_${DateTime.now().microsecondsSinceEpoch}';
+    final id =
+        'item_${DateTime.now().microsecondsSinceEpoch}_${_items.length}';
     final now = Timestamp.now();
     final newItem = SavedItem(
       id: id,
       type: type,
       title: title,
       content: content,
+      summary: summary,
       url: url,
+      extractedLinks: extractedLinks,
+      extractedImages: extractedImages,
       createdAt: now,
     );
 
@@ -94,14 +106,20 @@ class SavedItemsRepository extends ChangeNotifier {
     required String type,
     String? title,
     String? content,
+    String? summary,
     String? url,
+    List<String> extractedLinks = const <String>[],
+    List<String> extractedImages = const <String>[],
     String owner = 'anonymous',
   }) async {
     addItemSync(
       type: type,
       title: title,
       content: content,
+      summary: summary,
       url: url,
+      extractedLinks: extractedLinks,
+      extractedImages: extractedImages,
       owner: owner,
     );
   }
@@ -115,7 +133,10 @@ class SavedItemsRepository extends ChangeNotifier {
       type: newType,
       title: old.title,
       content: old.content,
+      summary: old.summary,
       url: old.url,
+      extractedLinks: old.extractedLinks,
+      extractedImages: old.extractedImages,
       createdAt: old.createdAt,
     );
     notifyListeners();
