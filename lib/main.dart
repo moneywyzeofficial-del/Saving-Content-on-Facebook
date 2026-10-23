@@ -1,51 +1,133 @@
 // lib/main.dart
-import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'services/saved_items_repository.dart';
 import 'screens/saved_items_screen.dart';
+import 'screens/add_shared_link_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(FacebookSaveApp());
+  await SavedItemsRepository.instance.init();
+  runApp(const FacebookSaveApp());
 }
 
 class FacebookSaveApp extends StatefulWidget {
+  const FacebookSaveApp({super.key});
+
   @override
-  _FacebookSaveAppState createState() => _FacebookSaveAppState();
+  State<FacebookSaveApp> createState() => _FacebookSaveAppState();
+}
+
+class _CategorySpec {
+  final String type;
+  final String title;
+  final IconData icon;
+  final Color color;
+
+  const _CategorySpec({
+    required this.type,
+    required this.title,
+    required this.icon,
+    required this.color,
+  });
 }
 
 class _FacebookSaveAppState extends State<FacebookSaveApp> {
-  AccessToken? _fbAccessToken;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   int _selectedIndex = 0;
   static const platform = MethodChannel('com.example.facebook_save/share');
+
+  static const List<_CategorySpec> _categories = <_CategorySpec>[
+    _CategorySpec(
+      type: 'text',
+      title: 'Posts',
+      icon: Icons.article,
+      color: Color(0xFF3F51B5),
+    ),
+    _CategorySpec(
+      type: 'image',
+      title: 'Imagens',
+      icon: Icons.image,
+      color: Color(0xFF00897B),
+    ),
+    _CategorySpec(
+      type: 'video',
+      title: 'Vídeos',
+      icon: Icons.videocam,
+      color: Color(0xFFE53935),
+    ),
+    _CategorySpec(
+      type: 'link',
+      title: 'Links',
+      icon: Icons.link,
+      color: Color(0xFF1E88E5),
+    ),
+    _CategorySpec(
+      type: 'comment',
+      title: 'Comentários',
+      icon: Icons.comment,
+      color: Color(0xFF8E24AA),
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _checkLogin();
-    _listenForShareIntent();
-  }
-
-  Future<void> _checkLogin() async {
-    final accessToken = await FacebookAuth.instance.accessToken;
-    setState(() => _fbAccessToken = accessToken);
-  }
-
-  Future<void> _login() async {
-    final result = await FacebookAuth.instance.login();
-    if (result.status == LoginStatus.success) {
-      setState(() => _fbAccessToken = result.accessToken);
+    if (!kIsWeb) {
+      _listenForShareIntent();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkWebShareQueryParams();
+      });
     }
   }
 
-  // Listen for share intents from Android / iOS extensions
+  Future<void> _openAddScreen({
+    String? initialType,
+    String? initialUrl,
+    String? initialText,
+  }) async {
+    final targetType = initialType ?? _categories[_selectedIndex].type;
+    final savedType = await _navigatorKey.currentState?.push<String>(
+      MaterialPageRoute(
+        builder: (_) => AddSharedLinkScreen(
+          initialType: targetType,
+          initialUrl: initialUrl,
+          initialText: initialText,
+        ),
+      ),
+    );
+
+    if (savedType != null && mounted) {
+      final newIndex = _categories.indexWhere((c) => c.type == savedType);
+      if (newIndex != -1) {
+        setState(() => _selectedIndex = newIndex);
+      }
+      final ctx = _navigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Conteúdo guardado com sucesso!')),
+        );
+      }
+    }
+  }
+
+  void _checkWebShareQueryParams() {
+    final params = Uri.base.queryParameters;
+    final sharedUrl = params['url'] ?? params['link'];
+    final sharedText = params['text'] ?? params['title'];
+    if ((sharedUrl != null && sharedUrl.isNotEmpty) ||
+        (sharedText != null && sharedText.isNotEmpty)) {
+      _openAddScreen(
+        initialType: sharedUrl != null ? 'link' : 'text',
+        initialUrl: sharedUrl,
+        initialText: sharedText,
+      );
+    }
+  }
+
   void _listenForShareIntent() {
     platform.setMethodCallHandler((call) async {
       if (call.method == 'onShare') {
@@ -56,51 +138,21 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
   }
 
   Future<void> _handleSharedData(Map data) async {
-    // Data may contain: 'text', 'imageUri', 'videoUri', 'url'
-    final userId = _fbAccessToken?.userId ?? 'anonymous';
-    final now = FieldValue.serverTimestamp();
     if (data.containsKey('text')) {
-      await FirebaseFirestore.instance.collection('saved_items').add({
-        'type': 'text',
-        'content': data['text'],
-        'owner': userId,
-        'createdAt': now,
-      });
+      await SavedItemsRepository.instance.addItem(
+        type: 'text',
+        title: data['text']?.toString(),
+        content: data['text']?.toString(),
+      );
     }
     if (data.containsKey('url')) {
-      await FirebaseFirestore.instance.collection('saved_items').add({
-        'type': 'link',
-        'url': data['url'],
-        'owner': userId,
-        'createdAt': now,
-      });
+      await SavedItemsRepository.instance.addItem(
+        type: 'link',
+        title: data['url']?.toString(),
+        url: data['url']?.toString(),
+      );
     }
-    if (data.containsKey('imageUri') || data.containsKey('videoUri')) {
-      final uri = data['imageUri'] ?? data['videoUri'];
-      final isVideo = data.containsKey('videoUri');
-      final file = File(uri);
-      final bytes = await file.readAsBytes();
-      final storageRef = FirebaseStorage.instance.ref().child('media/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}');
-      await storageRef.putData(bytes, SettableMetadata(contentType: isVideo ? 'video/mp4' : 'image/jpeg'));
-      final downloadUrl = await storageRef.getDownloadURL();
-      await FirebaseFirestore.instance.collection('saved_items').add({
-        'type': isVideo ? 'video' : 'image',
-        'url': downloadUrl,
-        'owner': userId,
-        'createdAt': now,
-      });
-    }
-    // Show a snackbar to confirm
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Conteúdo salvo!')));
   }
-
-  static const List<Widget> _pages = <Widget>[
-    SavedItemsScreen(type: 'text', title: 'Posts'),
-    SavedItemsScreen(type: 'image', title: 'Imagens'),
-    SavedItemsScreen(type: 'video', title: 'Vídeos'),
-    SavedItemsScreen(type: 'link', title: 'Links'),
-    SavedItemsScreen(type: 'comment', title: 'Comentários'),
-  ];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -110,26 +162,59 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
 
   @override
   Widget build(BuildContext context) {
+    final currentCategory = _categories[_selectedIndex];
+
     return MaterialApp(
+      navigatorKey: _navigatorKey,
+      debugShowCheckedModeBanner: false,
       title: 'Facebook Save Content',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        useMaterial3: false,
+      ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Facebook Save Content'),
-          actions: [_fbAccessToken == null ? IconButton(icon: Icon(Icons.login), onPressed: _login) : Container()],
-        ),
-        body: _pages.elementAt(_selectedIndex),
-        bottomNavigationBar: BottomNavigationBar(
-          items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(icon: Icon(Icons.article), label: 'Posts'),
-            BottomNavigationBarItem(icon: Icon(Icons.image), label: 'Imagens'),
-            BottomNavigationBarItem(icon: Icon(Icons.videocam), label: 'Vídeos'),
-            BottomNavigationBarItem(icon: Icon(Icons.link), label: 'Links'),
-            BottomNavigationBarItem(icon: Icon(Icons.comment), label: 'Comentários'),
+          backgroundColor: currentCategory.color,
+          title: Text('FB Save • ${currentCategory.title}'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_box_outlined),
+              tooltip: 'Guardar Conteúdo',
+              onPressed: () => _openAddScreen(initialType: currentCategory.type),
+            ),
           ],
+        ),
+        body: SafeArea(
+          child: SavedItemsScreen(
+            key: ValueKey<String>(currentCategory.type),
+            type: currentCategory.type,
+            title: currentCategory.title,
+            categoryIcon: currentCategory.icon,
+            accentColor: currentCategory.color,
+            onAddPressed: () =>
+                _openAddScreen(initialType: currentCategory.type),
+          ),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: currentCategory.color,
+          icon: const Icon(Icons.add),
+          label: const Text('Guardar'),
+          onPressed: () => _openAddScreen(initialType: currentCategory.type),
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
-          selectedItemColor: Colors.indigoAccent,
+          selectedItemColor: currentCategory.color,
+          unselectedItemColor: Colors.grey.shade600,
           onTap: _onItemTapped,
+          items: _categories
+              .map(
+                (c) => BottomNavigationBarItem(
+                  icon: Icon(c.icon),
+                  label: c.title,
+                ),
+              )
+              .toList(),
         ),
       ),
     );

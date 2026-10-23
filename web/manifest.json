@@ -1,0 +1,45 @@
+{
+    "name": "Facebook Save Content",
+    "short_name": "FB Save",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#3F51B5",
+    "theme_color": "#3F51B5",
+    "description": "Guardar posts, imagens, vídeos, links e comentários do Facebook.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "share_target": {
+        "action": "/index.html",
+        "method": "GET",
+        "enctype": "application/x-www-form-urlencoded",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url"
+        }
+    },
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

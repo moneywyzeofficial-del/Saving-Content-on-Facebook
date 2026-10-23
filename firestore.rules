@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Para testes apenas – depois mudar para regras reais
+    match /saved_items/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

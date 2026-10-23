@@ -1,0 +1,7 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Permitir upload e download apenas para quem está autenticado (por enquanto livre)
+    allow read, write: if true;
+  }
+}
