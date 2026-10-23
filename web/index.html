@@ -5,14 +5,14 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Guardar posts, imagens, vídeos, links e comentários do Facebook.">
-  <meta name="theme-color" content="#3F51B5">
+  <meta name="theme-color" content="#1877F2">
 
   <!-- iOS / Apple PWA meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="FB Save">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
@@ -24,16 +24,25 @@
   <title>Facebook Save Content</title>
   <link rel="manifest" href="manifest.json">
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let registration of registrations) {
-          registration.unregister();
+    (async function() {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.unregister();
+          }
         }
-      });
-    }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const key of keys) {
+            await caches.delete(key);
+          }
+        }
+      } catch (e) {}
+    })();
   </script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js?v=3" async></script>
+  <script src="flutter_bootstrap.js?v=6" async></script>
 </body>
 </html>

@@ -67,15 +67,14 @@ class SavedItemsRepository extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> addItem({
+  void addItemSync({
     required String type,
     String? title,
     String? content,
     String? url,
     String owner = 'anonymous',
-  }) async {
-    await init();
-    final id = 'item_${DateTime.now().millisecondsSinceEpoch}';
+  }) {
+    final id = 'item_${DateTime.now().microsecondsSinceEpoch}';
     final now = Timestamp.now();
     final newItem = SavedItem(
       id: id,
@@ -88,13 +87,48 @@ class SavedItemsRepository extends ChangeNotifier {
 
     _items.insert(0, newItem);
     notifyListeners();
-    await _saveLocal();
+    unawaited(_saveLocal());
+  }
+
+  Future<void> addItem({
+    required String type,
+    String? title,
+    String? content,
+    String? url,
+    String owner = 'anonymous',
+  }) async {
+    addItemSync(
+      type: type,
+      title: title,
+      content: content,
+      url: url,
+      owner: owner,
+    );
+  }
+
+  void moveItemSync(String id, String newType) {
+    final idx = _items.indexWhere((item) => item.id == id);
+    if (idx == -1) return;
+    final old = _items[idx];
+    _items[idx] = SavedItem(
+      id: old.id,
+      type: newType,
+      title: old.title,
+      content: old.content,
+      url: old.url,
+      createdAt: old.createdAt,
+    );
+    notifyListeners();
+    unawaited(_saveLocal());
+  }
+
+  void deleteItemSync(String id) {
+    _items.removeWhere((item) => item.id == id);
+    notifyListeners();
+    unawaited(_saveLocal());
   }
 
   Future<void> deleteItem(String id) async {
-    await init();
-    _items.removeWhere((item) => item.id == id);
-    notifyListeners();
-    await _saveLocal();
+    deleteItemSync(id);
   }
 }

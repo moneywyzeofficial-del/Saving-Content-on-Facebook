@@ -6,11 +6,15 @@ import '../services/saved_items_repository.dart';
 class AddSharedLinkScreen extends StatefulWidget {
   final String initialInput;
   final String? fallbackType;
+  final ValueChanged<String>? onSaved;
+  final VoidCallback? onCancel;
 
   const AddSharedLinkScreen({
     super.key,
     required this.initialInput,
     this.fallbackType,
+    this.onSaved,
+    this.onCancel,
   });
 
   @override
@@ -69,7 +73,6 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
   late String _selectedType;
   late final TextEditingController _urlController;
   late final TextEditingController _titleController;
-  bool _saving = false;
 
   @override
   void initState() {
@@ -112,18 +115,13 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
     );
   }
 
-  Future<void> _confirmAndSave() async {
-    FocusScope.of(context).unfocus();
+  void _confirmAndSave() {
+    FocusManager.instance.primaryFocus?.unfocus();
     var rawUrl = _urlController.text.trim();
     final customTitle = _titleController.text.trim();
 
     if (rawUrl.isEmpty && customTitle.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Indica um link ou título antes de confirmar.'),
-        ),
-      );
-      return;
+      rawUrl = widget.initialInput.trim();
     }
 
     String? finalUrl;
@@ -138,27 +136,32 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
       }
     }
 
-    setState(() => _saving = true);
-    try {
-      await SavedItemsRepository.instance.addItem(
-        type: _selectedType,
-        title: customTitle.isNotEmpty
-            ? customTitle
-            : (_analysis.suggestedTitle.isNotEmpty
-                ? _analysis.suggestedTitle
-                : rawUrl),
-        content: customTitle.isNotEmpty ? customTitle : _analysis.detectedLabel,
-        url: finalUrl,
-      );
+    final displayTitle = customTitle.isNotEmpty
+        ? customTitle
+        : (_analysis.suggestedTitle.isNotEmpty
+            ? _analysis.suggestedTitle
+            : (rawUrl.isNotEmpty ? rawUrl : 'Conteúdo guardado'));
 
-      if (!mounted) return;
+    SavedItemsRepository.instance.addItemSync(
+      type: _selectedType,
+      title: displayTitle,
+      content: customTitle.isNotEmpty ? customTitle : _analysis.detectedLabel,
+      url: finalUrl,
+    );
+
+    if (widget.onSaved != null) {
+      widget.onSaved!(_selectedType);
+    } else if (mounted && Navigator.of(context).canPop()) {
       Navigator.of(context).pop(_selectedType);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao guardar: $e')),
-      );
-      setState(() => _saving = false);
+    }
+  }
+
+  void _handleCancel() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (widget.onCancel != null) {
+      widget.onCancel!();
+    } else if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -171,20 +174,66 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: selectedOption.color,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Voltar',
+          onPressed: _handleCancel,
+        ),
         title: const Text('Confirmar e Guardar'),
         actions: [
-          TextButton.icon(
-            onPressed: _saving ? null : _confirmAndSave,
-            icon: const Icon(Icons.check_circle, color: Colors.white),
-            label: const Text(
-              'CONFIRMAR',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: selectedOption.color,
+                elevation: 0,
+              ),
+              onPressed: _confirmAndSave,
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text(
+                'GUARDAR',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 6,
+                offset: Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: selectedOption.color,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: _confirmAndSave,
+              icon: const Icon(Icons.check_circle, size: 22),
+              label: Text(
+                'Confirmar e Guardar em ${selectedOption.title}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -286,22 +335,17 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // 2. Escolha da Categoria (Com recomendação destacada)
+              // 2. Escolha da Categoria
               const Text(
-                'Onde queres guardar este conteúdo?',
+                'Escolhe ou confirma onde guardar:',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'A app pré-selecionou a categoria recomendada, mas podes tocar noutra se preferires:',
-                style: TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -310,11 +354,11 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
                   final isRecommended =
                       _analysis.recommendedType == option.type;
 
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(10),
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => setState(() => _selectedType = option.type),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
+                      duration: const Duration(milliseconds: 120),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 10,
@@ -362,16 +406,15 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // 3. Título / Descrição editável
+              // 3. Título / Descrição editável (sem onTapOutside para não bloquear toques no iOS)
               TextField(
                 controller: _titleController,
                 maxLines: 2,
                 textInputAction: TextInputAction.done,
-                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: const InputDecoration(
-                  labelText: 'Título ou Nota (podes alterar)',
+                  labelText: 'Título ou Nota (opcional)',
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(),
@@ -385,7 +428,6 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
                 controller: _urlController,
                 keyboardType: TextInputType.url,
                 onChanged: _reanalyzeUrl,
-                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: const InputDecoration(
                   labelText: 'Link colado',
                   filled: true,
@@ -394,30 +436,6 @@ class _AddSharedLinkScreenState extends State<AddSharedLinkScreen> {
                   prefixIcon: Icon(Icons.link),
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // 5. Botão de Confirmação Final
-              _saving
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: selectedOption.color,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: _confirmAndSave,
-                      icon: const Icon(Icons.check_circle_outline, size: 22),
-                      label: Text(
-                        'Confirmar e Guardar em ${selectedOption.title}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
             ],
           ),
         ),
