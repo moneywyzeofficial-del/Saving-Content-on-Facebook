@@ -36,7 +36,9 @@ class _CategorySpec {
 
 class _FacebookSaveAppState extends State<FacebookSaveApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final TextEditingController _quickPasteController = TextEditingController();
   int _selectedIndex = 0;
+  bool _isOpeningReview = false;
   static const platform = MethodChannel('com.example.facebook_save/share');
 
   static const List<_CategorySpec> _categories = <_CategorySpec>[
@@ -84,33 +86,89 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
     }
   }
 
-  Future<void> _openAddScreen({
-    String? initialType,
-    String? initialUrl,
-    String? initialText,
-  }) async {
-    final targetType = initialType ?? _categories[_selectedIndex].type;
-    final savedType = await _navigatorKey.currentState?.push<String>(
-      MaterialPageRoute(
-        builder: (_) => AddSharedLinkScreen(
-          initialType: targetType,
-          initialUrl: initialUrl,
-          initialText: initialText,
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _quickPasteController.dispose();
+    super.dispose();
+  }
 
-    if (savedType != null && mounted) {
-      final newIndex = _categories.indexWhere((c) => c.type == savedType);
-      if (newIndex != -1) {
-        setState(() => _selectedIndex = newIndex);
+  Future<void> _openReviewScreen(String inputText, {String? fallbackType}) async {
+    if (_isOpeningReview) return;
+    _isOpeningReview = true;
+    try {
+      final savedType = await _navigatorKey.currentState?.push<String>(
+        MaterialPageRoute(
+          builder: (_) => AddSharedLinkScreen(
+            initialInput: inputText,
+            fallbackType: fallbackType ?? _categories[_selectedIndex].type,
+          ),
+        ),
+      );
+
+      if (savedType != null && mounted) {
+        _quickPasteController.clear();
+        final newIndex = _categories.indexWhere((c) => c.type == savedType);
+        if (newIndex != -1) {
+          setState(() => _selectedIndex = newIndex);
+        }
+        final ctx = _navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          final targetTitle = _categories
+              .firstWhere((c) => c.type == savedType,
+                  orElse: () => _categories.first)
+              .title;
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            SnackBar(
+              content: Text('Guardado com sucesso em $targetTitle!'),
+              backgroundColor: Colors.green.shade700,
+            ),
+          );
+        }
       }
+    } finally {
+      _isOpeningReview = false;
+    }
+  }
+
+  Future<void> _pasteFromClipboardAndAnalyze() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final clipText = data?.text?.trim() ?? '';
+      if (clipText.isNotEmpty) {
+        _quickPasteController.text = clipText;
+        await _openReviewScreen(clipText);
+        return;
+      }
+    } catch (_) {}
+
+    // If clipboard access is blocked by iOS Safari permissions, use field text or open screen
+    final currentText = _quickPasteController.text.trim();
+    if (currentText.isNotEmpty) {
+      await _openReviewScreen(currentText);
+    } else {
       final ctx = _navigatorKey.currentContext;
       if (ctx != null && ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Conteúdo guardado com sucesso!')),
+          const SnackBar(
+            content: Text(
+              'Toca no campo acima, escolhe "Colar" e toca em Analisar.',
+            ),
+          ),
         );
       }
+    }
+  }
+
+  void _onQuickFieldChanged(String value) {
+    final trimmed = value.trim();
+    // When the user pastes a full URL into the main screen field, automatically open the review page!
+    if (trimmed.length > 10 &&
+        (trimmed.startsWith('http://') ||
+            trimmed.startsWith('https://') ||
+            trimmed.contains('facebook.com/') ||
+            trimmed.contains('fb.watch/'))) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      _openReviewScreen(trimmed);
     }
   }
 
@@ -118,13 +176,11 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
     final params = Uri.base.queryParameters;
     final sharedUrl = params['url'] ?? params['link'];
     final sharedText = params['text'] ?? params['title'];
-    if ((sharedUrl != null && sharedUrl.isNotEmpty) ||
-        (sharedText != null && sharedText.isNotEmpty)) {
-      _openAddScreen(
-        initialType: sharedUrl != null ? 'link' : 'text',
-        initialUrl: sharedUrl,
-        initialText: sharedText,
-      );
+    final combined = [sharedUrl, sharedText]
+        .where((s) => s != null && s.trim().isNotEmpty)
+        .join(' ');
+    if (combined.isNotEmpty) {
+      _openReviewScreen(combined);
     }
   }
 
@@ -132,26 +188,12 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
     platform.setMethodCallHandler((call) async {
       if (call.method == 'onShare') {
         final Map args = call.arguments as Map;
-        await _handleSharedData(args);
+        final shared = (args['url'] ?? args['text'] ?? '').toString();
+        if (shared.isNotEmpty) {
+          await _openReviewScreen(shared);
+        }
       }
     });
-  }
-
-  Future<void> _handleSharedData(Map data) async {
-    if (data.containsKey('text')) {
-      await SavedItemsRepository.instance.addItem(
-        type: 'text',
-        title: data['text']?.toString(),
-        content: data['text']?.toString(),
-      );
-    }
-    if (data.containsKey('url')) {
-      await SavedItemsRepository.instance.addItem(
-        type: 'link',
-        title: data['url']?.toString(),
-        url: data['url']?.toString(),
-      );
-    }
   }
 
   void _onItemTapped(int index) {
@@ -173,33 +215,132 @@ class _FacebookSaveAppState extends State<FacebookSaveApp> {
         useMaterial3: false,
       ),
       home: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
         appBar: AppBar(
           backgroundColor: currentCategory.color,
+          elevation: 0,
           title: Text('FB Save • ${currentCategory.title}'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.add_box_outlined),
-              tooltip: 'Guardar Conteúdo',
-              onPressed: () => _openAddScreen(initialType: currentCategory.type),
-            ),
-          ],
         ),
         body: SafeArea(
-          child: SavedItemsScreen(
-            key: ValueKey<String>(currentCategory.type),
-            type: currentCategory.type,
-            title: currentCategory.title,
-            categoryIcon: currentCategory.icon,
-            accentColor: currentCategory.color,
-            onAddPressed: () =>
-                _openAddScreen(initialType: currentCategory.type),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Barra Principal para Colar Link e Analisar
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Cola aqui o link do Facebook para analisar e guardar:',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _quickPasteController,
+                            keyboardType: TextInputType.url,
+                            textInputAction: TextInputAction.go,
+                            onChanged: _onQuickFieldChanged,
+                            onSubmitted: (val) {
+                              if (val.trim().isNotEmpty) {
+                                _openReviewScreen(val.trim());
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Colar link (Post, Vídeo, Foto...)',
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.paste_rounded,
+                                color: currentCategory.color,
+                              ),
+                              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _quickPasteController,
+                                builder: (_, value, __) {
+                                  if (value.text.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: _quickPasteController.clear,
+                                  );
+                                },
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: currentCategory.color,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            final txt = _quickPasteController.text.trim();
+                            if (txt.isNotEmpty) {
+                              _openReviewScreen(txt);
+                            } else {
+                              _pasteFromClipboardAndAnalyze();
+                            }
+                          },
+                          icon: const Icon(Icons.auto_awesome, size: 18),
+                          label: const Text(
+                            'Analisar',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Lista da Categoria Selecionada
+              Expanded(
+                child: SavedItemsScreen(
+                  key: ValueKey<String>(currentCategory.type),
+                  type: currentCategory.type,
+                  title: currentCategory.title,
+                  categoryIcon: currentCategory.icon,
+                  accentColor: currentCategory.color,
+                  onAddPressed: () => _openReviewScreen(
+                    _quickPasteController.text.trim(),
+                    fallbackType: currentCategory.type,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: currentCategory.color,
-          icon: const Icon(Icons.add),
-          label: const Text('Guardar'),
-          onPressed: () => _openAddScreen(initialType: currentCategory.type),
         ),
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
